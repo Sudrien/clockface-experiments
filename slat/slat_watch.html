@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Slat Watch</title>
+<style>body{margin:0;background:#ddd;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font:14px system-ui}svg{width:min(90vw,400px);height:auto;background:#fff}button{margin-top:12px;padding:8px 14px}#t{margin-top:8px;font-variant-numeric:tabular-nums}</style></head><body>
+<svg viewBox="0 0 200 200" shape-rendering="crispEdges"><g id="g" fill="#000"></g></svg>
+<div id="t"></div><button id="b">Real time</button>
+<script>
+// Single-precision-style float math throughout (ports to sinf/cosf/expf/sqrtf);
+// only the final pixel values are floored, as fillRect needs ints.
+const R=88,RMC=78,RH=60,RM=72;            // hour circle, minute circle, hand tips
+const SIG=3,XW=24;                        // gaussian width, crossfade width
+const RA=3,RL=12,RW=5,RD=14;              // ripple amp, wavelength, speed, decay
+const NS_=66,PITCH=3,OFF=1;
+
+const rest=(c,r)=>{const o=Math.abs(c-100);return o<r?100-Math.sqrt(r*r-o*o):100};
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const ripple=(d,t)=>{const a=Math.abs(d);
+  return RA*Math.cos(a*2*Math.PI/RL-t*RW)*Math.exp(-a/RD)*Math.min(1,a/(2*SIG))};
+const bump=(b,full,d,k)=>full<=b?b:b+(full-b)*k*Math.exp(-d*d/(2*SIG*SIG));
+
+const g=document.getElementById('g'),rects=[];
+for(let k=0;k<NS_*4;k++){const r=document.createElementNS('http://www.w3.org/2000/svg','rect');g.appendChild(r);rects.push(r)}
+function fillRect(k,x,y,w,h){const r=rects[k];r.setAttribute('x',x);r.setAttribute('y',y);r.setAttribute('width',w);r.setAttribute('height',h)}
+
+let fast=true,sim=600,last=performance.now();   // sim in minutes (float)
+document.getElementById('b').onclick=e=>{fast=!fast;e.target.textContent=fast?'Real time':'Fast forward'};
+function frame(now){
+  const dt=(now-last)/1000;last=now;const t=now/1000;
+  if(fast)sim=(sim+dt*2)%720;
+  else{const d=new Date();sim=(d.getHours()%12)*60+d.getMinutes()+d.getSeconds()/60}
+  const h=Math.floor(sim/60),m=sim%60;
+  const ha=(sim*0.5)*Math.PI/180,ma=(m*6)*Math.PI/180;
+  const hx=100+RH*Math.sin(ha),hy=100-RH*Math.cos(ha);
+  const mx=100+RM*Math.sin(ma),my=100-RM*Math.cos(ma);
+  for(let i=0;i<NS_;i++){
+    const p=OFF+i*PITCH,c=p+1;
+    // hour: top/bottom
+    let b=Math.max(1,rest(c,R)+ripple(c-hx,t));
+    let lT=bump(b,hy,c-hx,clamp(1+(hy-100)/XW,0,1));
+    let lB=bump(b,200-hy,c-hx,clamp(1+(100-hy)/XW,0,1));
+    // minute: left/right
+    b=Math.max(1,rest(c,RMC)+ripple(c-my,t));
+    let lL=bump(b,mx,c-my,clamp(1+(mx-100)/XW,0,1));
+    let lR=bump(b,200-mx,c-my,clamp(1+(100-mx)/XW,0,1));
+    lT=Math.floor(lT);lB=Math.floor(lB);lL=Math.floor(lL);lR=Math.floor(lR);
+    fillRect(i*4,p,0,2,lT);fillRect(i*4+1,p,200-lB,2,lB);
+    fillRect(i*4+2,0,p,lL,2);fillRect(i*4+3,200-lR,p,lR,2);
+  }
+  document.getElementById('t').textContent=(h||12)+':'+String(Math.floor(m)).padStart(2,'0');
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script></body></html>

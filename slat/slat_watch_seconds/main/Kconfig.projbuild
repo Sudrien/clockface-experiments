@@ -1,0 +1,18 @@
+menu "Slat Watch"
+    config SLAT_WIFI_SSID
+        string "WiFi SSID"
+        default ""
+    config SLAT_WIFI_PASS
+        string "WiFi password"
+        default ""
+    config SLAT_NTP_SERVER
+        string "NTP server"
+        default "pool.ntp.org"
+    config SLAT_TZ
+        string "POSIX time zone"
+        default "UTC0"
+        help
+            e.g. "CET-1CEST,M3.5.0,M10.5.0/3" (Central Europe),
+            "EST5EDT,M3.2.0,M11.1.0" (US Eastern),
+            "PST8PDT,M3.2.0,M11.1.0" (US Pacific).
+endmenu

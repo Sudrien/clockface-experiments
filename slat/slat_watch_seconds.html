@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Slat Watch Seconds</title>
+<style>body{margin:0;background:#ddd;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font:14px system-ui}canvas{width:min(94vw,640px);height:auto;image-rendering:pixelated;background:#fff}button{margin-top:12px;padding:8px 14px}#t{margin-top:8px;font-variant-numeric:tabular-nums}</style></head><body>
+<canvas id="c" width="320" height="240"></canvas>
+<div id="t"></div><button id="b">Real time</button>
+<script>
+// Mirror of slat_watch.c v2: three slat families at 120deg on a 320x240 panel.
+// hour = 0deg (vertical), minute = 120deg, second = 240deg. Float math, per-pixel.
+const W=320,H=240,CX=160,CY=120;
+const SIG=3.6,XW=28.8,RA=3.6,RL=14.4,RW=5,RD=16.8;
+const PITCH=3,SLAT_W=2,UMAX=201,NSL=135,FAST_RATE=2;
+const fam=[{ang:0,ring:106,tip:66},{ang:120,ring:112,tip:90},{ang:240,ring:116,tip:104}];
+for(const f of fam){const a=f.ang*Math.PI/180;
+  f.nx=Math.cos(a);f.ny=Math.sin(a);f.dx=-Math.sin(a);f.dy=Math.cos(a);
+  f.eT=new Float32Array(NSL);f.eB=new Float32Array(NSL)}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const ripple=(d,ph)=>{const a=Math.abs(d);
+  return RA*Math.cos(a*2*Math.PI/RL-ph)*Math.exp(-a/RD)*Math.min(1,a/(2*SIG))};
+function computeFamily(f,handDeg,ph){
+  const ha=handDeg*Math.PI/180,px=f.tip*Math.sin(ha),py=-f.tip*Math.cos(ha);
+  const hu=px*f.nx+py*f.ny,hv=px*f.dx+py*f.dy;
+  const kT=clamp(1+hv/XW,0,1),kB=clamp(1-hv/XW,0,1);
+  for(let i=0;i<NSL;i++){
+    const c=-UMAX+i*PITCH+SLAT_W/2,o=Math.abs(c);
+    const s=o<f.ring?Math.sqrt(f.ring*f.ring-o*o):0;
+    const d=c-hu,rp=ripple(d,ph),g=Math.exp(-d*d/(2*SIG*SIG));
+    let t=-s+rp,b=s-rp;
+    if(hv>t)t+=(hv-t)*kT*g;
+    if(hv<b)b-=(b-hv)*kB*g;
+    f.eT[i]=t;f.eB[i]=b}}
+const ctx=document.getElementById('c').getContext('2d');
+const img=ctx.createImageData(W,H),px32=new Uint32Array(img.data.buffer);
+const WHITE=0xffffffff,BLACK=0xff000000;
+function render(){
+  const u=[0,0,0],v=[0,0,0];let k=0;
+  for(let y=0;y<H;y++){const ry=y+.5-CY,rx=.5-CX;
+    for(let f=0;f<3;f++){u[f]=rx*fam[f].nx+ry*fam[f].ny+UMAX;v[f]=rx*fam[f].dx+ry*fam[f].dy}
+    for(let x=0;x<W;x++){let p=WHITE;
+      for(let f=0;f<3;f++){const F=fam[f],uu=u[f],vv=v[f];u[f]+=F.nx;v[f]+=F.dx;
+        if(p===BLACK)continue;
+        const i=Math.floor(uu/PITCH);
+        if(uu-i*PITCH>=SLAT_W)continue;
+        if(vv<=F.eT[i]||vv>=F.eB[i])p=BLACK}
+      px32[k++]=p}}
+  ctx.putImageData(img,0,0)}
+let fast=true,sim=600,last=performance.now();   // sim in minutes (0..720)
+document.getElementById('b').onclick=e=>{fast=!fast;e.target.textContent=fast?'Real time':'Fast forward'};
+function frame(now){
+  const dt=(now-last)/1000;last=now;const ph=(now/1000*RW)%(2*Math.PI);
+  if(fast)sim=(sim+dt*FAST_RATE)%720;
+  else{const d=new Date();sim=(d.getHours()%12)*60+d.getMinutes()+(d.getSeconds()+d.getMilliseconds()/1000)/60}
+  const m=sim%60,sec=(sim*60)%60;
+  computeFamily(fam[0],sim*.5,ph);computeFamily(fam[1],m*6,ph);computeFamily(fam[2],sec*6,ph);
+  render();
+  const h=Math.floor(sim/60);
+  document.getElementById('t').textContent=(h||12)+':'+String(Math.floor(m)).padStart(2,'0')+':'+String(Math.floor(sec)).padStart(2,'0');
+  requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script></body></html>
